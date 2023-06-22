@@ -24,6 +24,16 @@ PIDFILE=/var/run/klipper.pid
 
 case "$1" in
 start)  log_daemon_msg "Starting" $NAME
+        [ -L /dev/ttyUSB ] && sudo rm /dev/ttyUSB
+        if [ -e /dev/ttyACM0 ]; then sudo ln -s /dev/ttyACM0 /dev/ttyUSB
+        elif [ -e /dev/ttyACM1 ]; then sudo ln -s /dev/ttyACM1 /dev/ttyUSB
+        elif [ -e /dev/ttyACM2 ]; then sudo ln -s /dev/ttyACM2 /dev/ttyUSB
+        elif [ -e /dev/ttyUSB0 ]; then sudo ln -s /dev/ttyUSB0 /dev/ttyUSB
+        elif [ -e /dev/ttyUSB1 ]; then sudo ln -s /dev/ttyUSB1 /dev/ttyUSB
+        elif [ -e /dev/ttyUSB2 ]; then sudo ln -s /dev/ttyUSB2 /dev/ttyUSB
+        elif [ -e /home/android/octo4a/serialpipe ]; then sudo ln -s /home/android/octo4a/serialpipe /dev/ttyUSB
+        fi
+        [ -L /dev/ttyUSB ] &&  sudo chmod 666 /dev/ttyUSB
         start-stop-daemon --start --quiet --exec $KLIPPY_EXEC \
                           --background --pidfile $PIDFILE --make-pidfile \
                           --chuid $KLIPPY_USER --user $KLIPPY_USER \
