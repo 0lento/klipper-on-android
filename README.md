@@ -19,7 +19,7 @@
 ## Setup Instructions
 - Create a container within Linux Deploy using the following settings:
   - **Bootstrap**:
-    - **Distro**: `Debian` (buster)
+    - **Distro**: `Debian` (stable)
     - **Installation type**: `Directory`  
     *Note: You can choose `File` but make sure it's large enough as you can't resize it later and 2 GB is not enough.*  
     - **Installation path**: `/data/local/debian`  
@@ -46,8 +46,8 @@
   kiauh/kiauh.sh
   ```
   *Note: KlipperScreen in particular will take a very long time (tens of minutes).*  
-- Find your printer's serial device for use in Klipper's `printer.cfg`:  
-  It will likely be `/dev/ttyACM0` or `/dev/ttyUSB0`. Check if either of those appear/disappear under `/dev/` when plugging/unplugging your printer.  
+- Find your printer's serial device:  
+  It will likely be `/dev/ttyACM0` or `/dev/ttyUSB0`. Check if either of those appear/disappear under `/dev/` when plugging/unplugging your printer. If it shows up, move forward. 
   
   If you cannot find your printer in `/dev/`, then you can check Octo4a app which includes a custom implementation of the CH34x driver. IMPORTANT: You don't need to run OctoPrint within it so once in the main screen of the app just stop it if it's running. To do this:   
     - Install Octo4a from https://github.com/feelfreelinux/octo4a/releases
@@ -60,22 +60,13 @@
           - **Mount points**: press on the "+" button
             - Source: `/data/data/com.octo4a/files`
             - Target: `/home/android/octo4a`
-    - `/home/android/octo4a/serialpipe` is the serial port you need to use in your `printer.cfg`
-- Make the serial device accessible to Klipper:
-    ```bash
-    sudo chmod 777 /dev/ttyACM0
-    # or 
-    sudo chmod 777 /dev/ttyUSB0
-    # or 
-    sudo chmod 777 /home/android/octo4a/serialpipe
-    ```
 - Install the init and xterm scripts from this gist:  
   ```bash
-  sudo wget -O /etc/default/klipper https://raw.githubusercontent.com/d4rk50ul1/klipper-on-android/main/scripts/etc_default_klipper
-  sudo wget -O /etc/init.d/klipper https://raw.githubusercontent.com/d4rk50ul1/klipper-on-android/main/scripts/etc_init.d_klipper
-  sudo wget -O /etc/default/moonraker https://raw.githubusercontent.com/d4rk50ul1/klipper-on-android/main/scripts/etc_default_moonraker
-  sudo wget -O /etc/init.d/moonraker https://raw.githubusercontent.com/d4rk50ul1/klipper-on-android/main/scripts/etc_init.d_moonraker
-  sudo wget -O /usr/local/bin/xterm https://raw.githubusercontent.com/d4rk50ul1/klipper-on-android/main/scripts/usr_local_bin_xterm
+  sudo wget -O /etc/default/klipper https://raw.githubusercontent.com/0lento/klipper-on-android/main/scripts/etc_default_klipper
+  sudo wget -O /etc/init.d/klipper https://raw.githubusercontent.com/0lento/klipper-on-android/main/scripts/etc_init.d_klipper
+  sudo wget -O /etc/default/moonraker https://raw.githubusercontent.com/0lento/klipper-on-android/main/scripts/etc_default_moonraker
+  sudo wget -O /etc/init.d/moonraker https://raw.githubusercontent.com/0lento/klipper-on-android/main/scripts/etc_init.d_moonraker
+  sudo wget -O /usr/local/bin/xterm https://raw.githubusercontent.com/0lento/klipper-on-android/main/scripts/usr_local_bin_xterm
   
   sudo chmod +x /etc/init.d/klipper 
   sudo chmod +x /etc/init.d/moonraker 
@@ -83,6 +74,15 @@
   
   sudo update-rc.d klipper defaults
   sudo update-rc.d moonraker defaults
+  ```
+- This repo has modified klipper daemon script that automatically tries to symlink `ttyACM[0-2]`, `ttyUSB[0-2]` and `octo4a/serialpipe` into `/dev/ttyUSB` and runs chmod on the symlink every time you start the Klipper daemon. If your serialport changes after Klipper has been started, you can restart it with:
+  ```bash
+  sudo /etc/init.d/klipper restart
+  ```
+- Edit `~/printer_data/config/printer.cfg` and change your `mcu` section to:
+  ```
+  [mcu]
+  serial: /dev/ttyUSB
   ```
 - Stop the Debian container.
 - Start XServer XSDL.
@@ -92,33 +92,38 @@
 - Start the Debian container.
 - KlipperScreen should appear in XServer XSDL and Mainsail and/or Fluidd should be accesible using your Android device's IP address in a browser.
 
-## Misc
-You can start/stop Klipper and Moonraker manually by using the `service` command (eg: `sudo service start klipper`).  
-Logs can be found in `/home/android/klipper_logs`.
-
-## Telegram Bot
-You can find the instructions how to setup the Telegram Bot [here](https://github.com/d4rk50ul1/klipper-on-android/blob/main/telegram_instructions.md)
-
-## Troubleshooting (ongoing section based on comments)
-- There might be the case that when accessing Mainsail through Browser, you get an error message and no connection to moonraker: mainsail Permission denied while connecting to upstream in `klipper_logs/mainsail_error.log`. To fix this you must change the file `/etc/nginx/nginx.conf`, change `user www-data;` to `user android;` 
-- If anyone is having network issues in the container as a non root user after a few minutes, you need to disable deep sleep/idle. You can do that by using this command in a shell (termux or adb doesn't matter): `dumpsys deviceidle disable`. You may also need this app: [Wake Lock - CPU Awake] (https://play.google.com/store/apps/details?id=com.dambara.wakelocker)
-- As per [ZerGo0](https://gist.github.com/ZerGo0) comments - The latest moonraker update seems to break a few things. There are some changes about the directory and file locations, but you can just sym link the new directories to the old ones using the included script: 
-  ```bash
-  sudo /etc/init.d/moonraker stop
-  cd ~/moonraker
-  scripts/data-path-fix.sh
-  sudo /etc/init.d/moonraker start
+- Edit `~/printer_data/config/moonraker.conf` and change the line with klippy_uds_address into:
   ```
-  You can obviously also do this manually.
-  You also have to add the following section to your `moonraker.conf`:
-  ```bash
+  klippy_uds_address: /tmp/klippy_uds
+  ```
+- Add following section to the same `moonraker.conf` file
+  ```
   [machine]
   validate_service: False
   validate_config: False
   provider: none
   ```
-  There are a few more deprecated settings now, check the notifications or moonraker docs to find out what you need to remove.
- 
+- Since we can't reboot the system with chroot, you can alter Moonraker to use it's reboot menu entry to restart Klipper daemon so you can always get the serial connection back in case your serial device got reconnected on different port while Klipper was already running.
+  To do this, you can edit file `~/moonraker/moonraker/components/machine.py`, find [this line](https://github.com/Arksine/moonraker/blob/40013ec27046a52eeb07502170e9376e22d3e06e/moonraker/components/machine.py#L805) and change it into
+  ```
+        await self._exec_sudo_command("sudo service klipper restart")
+  ```
+- Now with all changes done, restart mooonraker:
+  ```bash
+  sudo service moonraker restart
+  ```
+
+## Misc
+You can start/stop Klipper and Moonraker manually by using the `service` command (eg: `sudo service klipper start`).  
+Logs can be found in `~/printer_data/logs`.
+
+## Telegram Bot
+You can find the instructions how to setup the Telegram Bot [here](https://github.com/d4rk50ul1/klipper-on-android/blob/main/telegram_instructions.md)
+
+## Troubleshooting (ongoing section based on comments)
+- If X Server XSDL fails to launch and asks you to try different display number, see (https://github.com/pelya/xserver-xsdl/issues/112) or find older version that works on your device (v1.11.40 has been verified to work on Android 6)
+- There might be the case that when accessing Mainsail through Browser, you get an error message and no connection to moonraker: mainsail Permission denied while connecting to upstream in `klipper_logs/mainsail_error.log`. To fix this you must change the file `/etc/nginx/nginx.conf`, change `user www-data;` to `user android;` 
+- If anyone is having network issues in the container as a non root user after a few minutes, you need to disable deep sleep/idle. You can do that by using this command in a shell (termux or adb doesn't matter): `dumpsys deviceidle disable`. You may also need this app: [Wake Lock - CPU Awake] (https://play.google.com/store/apps/details?id=com.dambara.wakelocker)
 - When checking the OTG+Charge Cable, each phone "recognizes" a different resistor, my recommendation is that once you build your cable, try not to solder the resistor directly to the 5 pin plug. Instead, use a breadboard temporary and test with different resistors. My approach was the following:
     - Without connecting anything to the microusb port (not tested with type-c) Open Octo4a app in your mobile
     - connect the printer to the usb modified cable (assuming that you have already builded one ;) ) 
